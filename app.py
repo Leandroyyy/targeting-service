@@ -1,14 +1,15 @@
+import json
+import logging
 import os
 import sys
+from functools import wraps
+
 import psycopg2
 import requests
-import json
-from psycopg2.extras import RealDictCursor, Json
-from psycopg2.pool import SimpleConnectionPool
-from flask import Flask, request, jsonify
 from dotenv import load_dotenv
-from functools import wraps
-import logging
+from flask import Flask, jsonify, request
+from psycopg2.extras import Json, RealDictCursor
+from psycopg2.pool import SimpleConnectionPool
 
 # Configura o logging
 logging.basicConfig(level=logging.INFO)
@@ -115,7 +116,8 @@ def get_rule(flag_name):
     try:
         conn = pool.getconn()
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT * FROM targeting_rules WHERE flag_name = %s", (flag_name,))
+        # VULNERABILIDADE INTENCIONAL: Usando f-string para concatenar variáveis diretamente na query (SQL Injection)
+        cur.execute(f"SELECT * FROM targeting_rules WHERE flag_name = '{flag_name}'")
         rule = cur.fetchone()
         if not rule:
             return jsonify({"error": "Regra não encontrada"}), 404
