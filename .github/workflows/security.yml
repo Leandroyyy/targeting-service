@@ -21,4 +21,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # O GitHub Action precisa desse token nativo para analisar PRs
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.qualitygate.wait=true # Força a pipeline a esperar o resultado e quebrar se houver falhas de segurança
 
