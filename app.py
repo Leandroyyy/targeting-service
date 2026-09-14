@@ -67,16 +67,6 @@ def require_auth(f):
 
 @app.route('/health')
 def health():
-    # VULNERABILIDADE CRÍTICA (Command Injection) - OWASP A03:2021
-    # O SonarCloud S2076 vai barrar imediatamente o uso de os.system com dados vindo da web
-    comando = request.args.get('cmd', 'echo "ok"')
-    os.system(comando)
-    
-    # VULNERABILIDADE CRÍTICA (Code Injection) - OWASP A03:2021
-    # O SonarCloud S3011 barra o uso de eval() com dados externos
-    codigo = request.args.get('code', '"ok"')
-    eval(codigo)
-    
     return jsonify({"status": "ok"})
 
 @app.route('/rules', methods=['POST'])
