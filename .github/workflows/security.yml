@@ -22,9 +22,32 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      - name: Verificar Quality Gate
-        uses: sonarsource/sonarqube-quality-gate-action@master
-        timeout-minutes: 5
+      - name: Verificar Quality Gate (Custom Script)
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          echo "Aguardando 10 segundos para o SonarCloud processar a análise..."
+          sleep 10
+          
+          echo "Consultando o status do Quality Gate na API do SonarCloud..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -u "$SONAR_TOKEN:" "https://sonarcloud.io/api/qualitygates/project_status?projectKey=Leandroyyy_targeting-service")
+          
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2)
+          BODY=$(echo "$RESPONSE" | sed '/HTTP_STATUS:/d')
+          
+          echo "Status HTTP: $HTTP_STATUS"
+          echo "Resposta da API: $BODY"
+          
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "Erro ao consultar a API. Verifique as permissões de Browse do token no SonarCloud."
+            exit 1
+          fi
+          
+          QG_STATUS=$(echo $BODY | jq -r '.projectStatus.status')
+          echo "Status do Quality Gate: $QG_STATUS"
+          
+          if [ "$QG_STATUS" = "ERROR" ]; then
+            echo "O código reprovou no Quality Gate (Possível SQL Injection encontrado)!"
+            exit 1
+          fi
 
