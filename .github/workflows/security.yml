@@ -1,0 +1,67 @@
+name: Security
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  sonarcloud:
+    name: SonarCloud
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # O Sonar exige o histórico completo do Git para análise correta (blame)
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Verificar Quality Gate (Custom Script)
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          echo "Lendo o ID da tarefa do SonarCloud..."
+          TASK_URL=$(grep "ceTaskUrl" .scannerwork/report-task.txt | cut -d'=' -f2-)
+          
+          echo "URL da Tarefa: $TASK_URL"
+          
+          # Fica consultando o SonarCloud até ele terminar de processar o nosso código
+          while true; do
+            echo "Checando status do processamento..."
+            TASK_RESPONSE=$(curl -s -u "$SONAR_TOKEN:" "$TASK_URL")
+            TASK_STATUS=$(echo $TASK_RESPONSE | jq -r '.task.status')
+            
+            echo "Status atual: $TASK_STATUS"
+            
+            if [ "$TASK_STATUS" = "SUCCESS" ]; then
+              ANALYSIS_ID=$(echo $TASK_RESPONSE | jq -r '.task.analysisId')
+              break
+            elif [ "$TASK_STATUS" = "FAILED" ] || [ "$TASK_STATUS" = "CANCELED" ]; then
+              echo "O processamento no SonarCloud falhou."
+              exit 1
+            fi
+            sleep 5
+          done
+          
+          echo "Processamento concluído! Consultando o Quality Gate da análise $ANALYSIS_ID..."
+          QG_URL="https://sonarcloud.io/api/qualitygates/project_status?analysisId=$ANALYSIS_ID"
+          
+          QG_RESPONSE=$(curl -s -u "$SONAR_TOKEN:" "$QG_URL")
+          QG_STATUS=$(echo $QG_RESPONSE | jq -r '.projectStatus.status')
+          
+          echo "Status do Quality Gate: $QG_STATUS"
+          echo "Detalhes: $QG_RESPONSE"
+          
+          if [ "$QG_STATUS" = "ERROR" ]; then
+            echo "❌ O código reprovou no Quality Gate (Vulnerabilidades Encontradas)!"
+            exit 1
+          fi
+          
+          echo "✅ O código passou no Quality Gate!"
+

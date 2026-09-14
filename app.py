@@ -1,14 +1,15 @@
+import json
+import logging
 import os
 import sys
+from functools import wraps
+
 import psycopg2
 import requests
-import json
-from psycopg2.extras import RealDictCursor, Json
-from psycopg2.pool import SimpleConnectionPool
-from flask import Flask, request, jsonify
 from dotenv import load_dotenv
-from functools import wraps
-import logging
+from flask import Flask, jsonify, request
+from psycopg2.extras import Json, RealDictCursor
+from psycopg2.pool import SimpleConnectionPool
 
 # Configura o logging
 logging.basicConfig(level=logging.INFO)
@@ -66,6 +67,16 @@ def require_auth(f):
 
 @app.route('/health')
 def health():
+    # VULNERABILIDADE CRÍTICA (Command Injection) - OWASP A03:2021
+    # O SonarCloud S2076 vai barrar imediatamente o uso de os.system com dados vindo da web
+    comando = request.args.get('cmd', 'echo "ok"')
+    os.system(comando)
+    
+    # VULNERABILIDADE CRÍTICA (Code Injection) - OWASP A03:2021
+    # O SonarCloud S3011 barra o uso de eval() com dados externos
+    codigo = request.args.get('code', '"ok"')
+    eval(codigo)
+    
     return jsonify({"status": "ok"})
 
 @app.route('/rules', methods=['POST'])
@@ -115,7 +126,8 @@ def get_rule(flag_name):
     try:
         conn = pool.getconn()
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT * FROM targeting_rules WHERE flag_name = %s", (flag_name,))
+        # VULNERABILIDADE INTENCIONAL: Usando f-string para concatenar variáveis diretamente na query (SQL Injection)
+        cur.execute(f"SELECT * FROM targeting_rules WHERE flag_name = '{flag_name}'")
         rule = cur.fetchone()
         if not rule:
             return jsonify({"error": "Regra não encontrada"}), 404
